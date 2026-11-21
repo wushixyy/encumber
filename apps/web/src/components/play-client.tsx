@@ -315,7 +315,7 @@ export function PlayClient() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-md bg-zinc-950 px-4 pt-6 pb-24 text-zinc-100">
+    <main className="mx-auto min-h-screen max-w-md bg-zinc-950 px-4 pt-6 pb-40 text-zinc-100">
       <header className="mb-5">
         <h1 className="text-3xl font-black tracking-tight">
           霸屏 <span className="text-amber-400">Hold the Screen</span>
@@ -471,24 +471,28 @@ export function PlayClient() {
         </div>
       </section>
 
-      {message && (
-        <output
-          className={`mt-4 block rounded-xl px-3 py-3 text-sm ${
-            message.kind === "ok"
-              ? "bg-emerald-500/15 text-emerald-300"
-              : "bg-rose-500/15 text-rose-300"
-          }`}
-        >
-          {message.text}
-          {message.tx && (
-            <a href={txUrl(message.tx)} target="_blank" rel="noreferrer" className="ml-2 underline">
-              查看交易
-            </a>
-          )}
-        </output>
-      )}
-
       <div className="fixed inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950 via-zinc-950 to-transparent px-4 pt-6 pb-5">
+        {message && (
+          <output
+            className={`mx-auto mb-2 block max-w-md rounded-xl px-3 py-2 text-sm ${
+              message.kind === "ok"
+                ? "bg-emerald-950 text-emerald-300"
+                : "bg-rose-950 text-rose-300"
+            }`}
+          >
+            {message.text}
+            {message.tx && (
+              <a
+                href={txUrl(message.tx)}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-2 underline"
+              >
+                查看交易
+              </a>
+            )}
+          </output>
+        )}
         <button
           type="button"
           onClick={grab}
