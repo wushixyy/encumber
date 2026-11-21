@@ -221,15 +221,17 @@ export function ScreenClient() {
           }),
           addrs.length === 0
             ? Promise.resolve([] as bigint[])
-            : publicClient.multicall({
-                allowFailure: false,
-                contracts: addrs.map((a) => ({
-                  address: CONTRACT_ADDRESS!,
-                  abi: holdTheScreenAbi,
-                  functionName: "totalHeldSeconds" as const,
-                  args: [a] as const,
-                })),
-              }),
+            : publicClient
+                .multicall({
+                  allowFailure: false,
+                  contracts: addrs.map((a) => ({
+                    address: CONTRACT_ADDRESS!,
+                    abi: holdTheScreenAbi,
+                    functionName: "totalHeldSeconds" as const,
+                    args: [a] as const,
+                  })),
+                })
+                .catch(() => [] as bigint[]),
         ]);
         setStats({ takeovers, prizePool });
         setHeld(Object.fromEntries(addrs.map((a, i) => [a, secs[i]])));
@@ -319,7 +321,7 @@ export function ScreenClient() {
           </div>
           <div className="rounded-2xl bg-zinc-900 p-3">
             <div className="text-2xl font-black text-amber-400">
-              {stats ? formatMon(stats.prizePool, 3) : "–"}
+              {stats ? formatMon(stats.prizePool, 4) : "–"}
             </div>
             <div className="text-xs text-zinc-400">奖池 MON</div>
           </div>
