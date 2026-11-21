@@ -42,7 +42,9 @@ const ALLOC_A = parseEther(process.env.ALLOC_A || "0.6");
 const ALLOC_B = parseEther(process.env.ALLOC_B || "0.4");
 const AGENT_GAS = parseEther(process.env.AGENT_GAS || "0.5");
 
-console.log(`财务管理员：${owner.address}（余额 ${formatEther(await pub.getBalance({ address: owner.address }))} MON）`);
+console.log(
+  `财务管理员：${owner.address}（余额 ${formatEther(await pub.getBalance({ address: owner.address }))} MON）`,
+);
 
 const deployHash = await wallet.deployContract({ abi, bytecode });
 const deployReceipt = await pub.waitForTransactionReceipt({ hash: deployHash });
@@ -68,8 +70,14 @@ async function send(label, request) {
 await send("存入团队预算", { functionName: "deposit", value: BUDGET });
 await send("创建项目 甲·客服", { functionName: "createProject", args: ["客服项目", vendorA] });
 await send("创建项目 乙·数据", { functionName: "createProject", args: ["数据项目", vendorB] });
-await send("绑定 客服 Agent", { functionName: "addAgent", args: [agentA.address, 0n, "客服 Agent"] });
-await send("绑定 数据 Agent", { functionName: "addAgent", args: [agentB.address, 1n, "数据 Agent"] });
+await send("绑定 客服 Agent", {
+  functionName: "addAgent",
+  args: [agentA.address, 0n, "客服 Agent"],
+});
+await send("绑定 数据 Agent", {
+  functionName: "addAgent",
+  args: [agentB.address, 1n, "数据 Agent"],
+});
 await send("分配 甲", { functionName: "allocate", args: [0n, ALLOC_A] });
 await send("分配 乙", { functionName: "allocate", args: [1n, ALLOC_B] });
 
@@ -90,5 +98,7 @@ setEnv("AGENT_A_KEY", agentAKey);
 setEnv("AGENT_B_KEY", agentBKey);
 setEnv("VENDOR_A_ADDRESS", vendorA);
 setEnv("VENDOR_B_ADDRESS", vendorB);
-console.log("✅ 已写入 apps/web/.env.local：NEXT_PUBLIC_ENCUMBER_ADDRESS、AGENT_A_KEY、AGENT_B_KEY、VENDOR_*");
+console.log(
+  "✅ 已写入 apps/web/.env.local：NEXT_PUBLIC_ENCUMBER_ADDRESS、AGENT_A_KEY、AGENT_B_KEY、VENDOR_*",
+);
 console.log(`   客服 Agent ${agentA.address}，数据 Agent ${agentB.address}`);

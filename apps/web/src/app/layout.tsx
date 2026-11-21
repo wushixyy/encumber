@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "霸屏 · Hold the Screen",
+  title: "预算锁 Encumber · Agent 团队的链上项目预算",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
