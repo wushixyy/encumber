@@ -44,7 +44,7 @@ type FundStatus = "idle" | "funding" | "warming" | "ready" | "error";
 const PK_KEY = "hts:burner-pk";
 const NICK_KEY = "hts:nickname";
 const COOLDOWN_MS = 2000;
-const GAS_RESERVE = parseEther("0.02");
+const GAS_RESERVE = parseEther("0.03");
 const MAX_TEXT = 40;
 
 function loadBurner() {
