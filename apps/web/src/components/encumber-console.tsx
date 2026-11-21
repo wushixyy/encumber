@@ -54,7 +54,7 @@ type Beat = {
   title: string;
   story: string;
   body: Record<string, string>;
-  expect: "ok" | "blocked" | "race";
+  expect: "ok" | "blocked" | "race" | "stress";
 };
 
 /** 自动演示的剧本：每一步都有旁白，评委不用提问也能看懂 */
@@ -118,6 +118,14 @@ const SCRIPT: Beat[] = [
       "甲只剩 0.02：Agent 要付这 0.02，财务同时要调走这 0.02。两笔交易一起发出，同一份钱只能用一次。",
     body: { step: "race", first: "pay" },
     expect: "race",
+  },
+  {
+    act: "幕四",
+    title: "20 个 Agent 同时抢最后的预算",
+    story:
+      "并发压测项目只剩 0.03，20 个 Agent 同时各付 0.0025。最多只能成功 12 笔：合约按链上顺序逐笔判定，总支出一分都不会超。",
+    body: { step: "stress" },
+    expect: "stress",
   },
 ];
 
@@ -230,6 +238,15 @@ export function EncumberConsole() {
     orderId: string;
   } | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [stress, setStress] = useState<{
+    total: number;
+    ok: number;
+    rejected: number;
+    spent: string;
+    budget: string;
+    blockFrom: string;
+    blockTo: string;
+  } | null>(null);
   const stopRef = useRef(false);
   const namesRef = useRef<Record<string, string>>({});
 
@@ -242,7 +259,8 @@ export function EncumberConsole() {
         publicClient.readContract({ ...base, functionName: "getActivities" }),
         publicClient.readContract({ ...base, functionName: "owner" }),
       ]);
-      setProjects(ps.slice(-2) as unknown as Project[]);
+      // 主卡片只显示当前一轮的甲乙两个项目，不显示并发压测项目
+      setProjects(ps.filter((x) => x.name !== "并发压测").slice(-2) as unknown as Project[]);
       setActivities([...acts] as Activity[]);
       setOwner(own);
       const n = await publicClient.readContract({ ...base, functionName: "reservationCount" });
@@ -324,11 +342,31 @@ export function EncumberConsole() {
         headers: { "Content-Type": "application/json", "x-demo-key": demoKey },
         body: JSON.stringify(beat.body),
       });
-      const data = (await r.json()) as { steps?: StepResult[]; error?: string };
+      const data = (await r.json()) as {
+        steps?: StepResult[];
+        error?: string;
+        stress?: {
+          total: number;
+          ok: number;
+          rejected: number;
+          spent: string;
+          budget: string;
+          blockFrom: string;
+          blockTo: string;
+        };
+      };
       if (!r.ok || !data.steps) throw new Error(data.error || "执行失败");
       setLastSteps(data.steps);
       const last = data.steps.at(-1);
-      if (beat.expect === "race") {
+      if (beat.expect === "stress" && data.stress) {
+        const st = data.stress;
+        setStress(st);
+        setBanner({
+          kind: "blocked",
+          text: `${st.total} 笔并发付款：成功 ${st.ok} 笔，被拦 ${st.rejected} 笔，总支出 ${formatMon(BigInt(st.spent))} = 预算 ${formatMon(BigInt(st.budget))}，一分不超`,
+          key: Date.now(),
+        });
+      } else if (beat.expect === "race") {
         const race = data.steps.slice(-2);
         const winner = race.find((s) => s.ok);
         const loser = race.find((s) => !s.ok);
@@ -580,65 +618,122 @@ export function EncumberConsole() {
         <div className="mt-6 grid gap-5 lg:grid-cols-[1.1fr_1fr]">
           {/* 同块对决 / 本步交易 */}
           <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-black">
-                {raceSteps.length === 2 ? "⚔️ 同一份钱，两笔交易" : "本步上链交易"}
-              </h2>
-              <span className="text-xs text-zinc-500">点击可在区块浏览器核对</span>
-            </div>
-            {raceSteps.length === 2 ? (
-              <div className="space-y-3">
-                {raceSteps.map((s) => (
-                  <a
-                    key={s.hash}
-                    href={txUrl(s.hash)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`animate-rise flex items-center justify-between rounded-2xl border px-4 py-4 ${
-                      s.ok
-                        ? "border-emerald-400/40 bg-emerald-500/10"
-                        : "border-rose-400/40 bg-rose-500/10"
-                    }`}
-                  >
-                    <span className="text-lg font-bold">
-                      {s.ok ? "✅" : "⛔"} {s.label}
-                      {!s.ok && <span className="ml-2 text-base text-rose-300">{s.reason}</span>}
+            {beat?.expect === "stress" && (
+              <div className="mb-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <h2 className="text-lg font-black">⚡ 20 个 Agent 并发付款</h2>
+                  {stress && (
+                    <span className="font-mono text-xs text-zinc-400">
+                      区块 #{stress.blockFrom} → #{stress.blockTo}
                     </span>
-                    <span className="font-mono text-sm text-zinc-300">
-                      区块 #{s.block} · 第 {s.index} 笔
-                    </span>
-                  </a>
-                ))}
-                <p className="text-sm text-zinc-400">
-                  {raceSteps[0].block === raceSteps[1].block
-                    ? "两笔落在同一个区块，合约按区块内顺序判定：先到的成功，后到的被拦，账一分不差。"
-                    : "两笔几乎同时发出，合约按上链顺序判定：先到的成功，后到的被拦，账一分不差。"}
-                </p>
+                  )}
+                </div>
+                <div className="grid grid-cols-10 gap-2">
+                  {(lastSteps.filter((x) => x.label.startsWith("Agent")).length
+                    ? lastSteps.filter((x) => x.label.startsWith("Agent"))
+                    : Array.from({ length: 20 }, () => null)
+                  ).map((x, i) =>
+                    x ? (
+                      <a
+                        key={x.hash}
+                        href={txUrl(x.hash)}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`${x.label}${x.ok ? "" : `：${x.reason ?? ""}`} · 区块 ${x.block}`}
+                        className={`animate-rise flex aspect-square items-center justify-center rounded-xl text-lg font-black ${
+                          x.ok ? "bg-emerald-500/80 text-zinc-950" : "bg-rose-500/30 text-rose-200"
+                        }`}
+                      >
+                        {x.ok ? "✓" : "✕"}
+                      </a>
+                    ) : (
+                      <div
+                        key={`pending-${i}`}
+                        className="flex aspect-square animate-pulse items-center justify-center rounded-xl bg-white/5 text-xs text-zinc-500"
+                      >
+                        {i + 1}
+                      </div>
+                    ),
+                  )}
+                </div>
+                {stress && (
+                  <p className="mt-3 text-sm text-zinc-300">
+                    成功 <b className="text-emerald-300">{stress.ok}</b> 笔 · 被拦{" "}
+                    <b className="text-rose-300">{stress.rejected}</b> 笔（可用余额不足）· 总支出{" "}
+                    <b className="text-amber-300">{formatMon(BigInt(stress.spent))}</b> = 预算{" "}
+                    {formatMon(BigInt(stress.budget))}，一分不超
+                  </p>
+                )}
               </div>
-            ) : (
-              <ul className="space-y-2">
-                {lastSteps.length === 0 && <li className="text-sm text-zinc-500">还没有交易</li>}
-                {lastSteps.map((s) => (
-                  <li key={s.hash}>
-                    <a
-                      href={txUrl(s.hash)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
-                    >
-                      <span>
-                        {s.ok ? "✅" : "⛔"} {s.label}
-                        {!s.ok && s.reason && <span className="text-rose-300">：{s.reason}</span>}
-                      </span>
-                      <span className="shrink-0 font-mono text-xs text-zinc-400">
-                        #{s.block} · 第 {s.index} 笔 ↗
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
             )}
-
+            {beat?.expect !== "stress" && (
+              <>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-lg font-black">
+                    {raceSteps.length === 2 ? "⚔️ 同一份钱，两笔交易" : "本步上链交易"}
+                  </h2>
+                  <span className="text-xs text-zinc-500">点击可在区块浏览器核对</span>
+                </div>
+                {raceSteps.length === 2 ? (
+                  <div className="space-y-3">
+                    {raceSteps.map((s) => (
+                      <a
+                        key={s.hash}
+                        href={txUrl(s.hash)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`animate-rise flex items-center justify-between rounded-2xl border px-4 py-4 ${
+                          s.ok
+                            ? "border-emerald-400/40 bg-emerald-500/10"
+                            : "border-rose-400/40 bg-rose-500/10"
+                        }`}
+                      >
+                        <span className="text-lg font-bold">
+                          {s.ok ? "✅" : "⛔"} {s.label}
+                          {!s.ok && (
+                            <span className="ml-2 text-base text-rose-300">{s.reason}</span>
+                          )}
+                        </span>
+                        <span className="font-mono text-sm text-zinc-300">
+                          区块 #{s.block} · 第 {s.index} 笔
+                        </span>
+                      </a>
+                    ))}
+                    <p className="text-sm text-zinc-400">
+                      {raceSteps[0].block === raceSteps[1].block
+                        ? "两笔落在同一个区块，合约按区块内顺序判定：先到的成功，后到的被拦，账一分不差。"
+                        : "两笔几乎同时发出，合约按上链顺序判定：先到的成功，后到的被拦，账一分不差。"}
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {lastSteps.length === 0 && (
+                      <li className="text-sm text-zinc-500">还没有交易</li>
+                    )}
+                    {lastSteps.map((s) => (
+                      <li key={s.hash}>
+                        <a
+                          href={txUrl(s.hash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
+                        >
+                          <span>
+                            {s.ok ? "✅" : "⛔"} {s.label}
+                            {!s.ok && s.reason && (
+                              <span className="text-rose-300">：{s.reason}</span>
+                            )}
+                          </span>
+                          <span className="shrink-0 font-mono text-xs text-zinc-400">
+                            #{s.block} · 第 {s.index} 笔 ↗
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
             <details className="mt-4 text-sm text-zinc-400">
               <summary className="cursor-pointer select-none">手动单步</summary>
               <div className="mt-2 flex flex-wrap gap-2">

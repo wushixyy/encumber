@@ -33,6 +33,7 @@ const Body = z.object({
     "settle",
     "realloc-released",
     "race",
+    "stress",
   ]),
   first: z.enum(["pay", "reallocate"]).optional(),
 });
@@ -237,6 +238,95 @@ export async function POST(request: Request) {
       steps.push(
         await exec(owner, address, "财务调拨释放出来的部分", "reallocate", [a, b, LEFT_A - ACTUAL]),
       );
+    } else if (step === "stress") {
+      // 第四幕：20 个 Agent 同时向同一个项目付款，项目只剩 0.03，每笔 0.0025，只能成功 12 笔
+      const pid = BigInt(process.env.STRESS_PROJECT_ID || "-1");
+      const keys = (process.env.STRESS_AGENT_KEYS || "").split(",").filter(Boolean);
+      if (pid < 0n || keys.length === 0) throw new Error("并发压测还没初始化");
+      const budget = parseEther(process.env.STRESS_BUDGET || "0.03");
+      const ps = await publicClient.readContract({
+        address,
+        abi: encumberAbi,
+        functionName: "getProjects",
+      });
+      const avail = ps[Number(pid)].available;
+      if (avail < budget) {
+        const need = budget - avail;
+        steps.push(await exec(owner, address, "准备：存入压测预算", "deposit", [], need));
+        steps.push(await exec(owner, address, "准备：分配给并发压测项目", "allocate", [pid, need]));
+      }
+      const each = budget / 12n;
+      const agents = keys.map((k) =>
+        createWalletClient({
+          account: privateKeyToAccount(k as Hex),
+          chain: monadTestnet,
+          transport,
+        }),
+      );
+      const data = encodeFunctionData({ abi: encumberAbi, functionName: "pay", args: [each] });
+      // 直接构造交易：一次取 gas 价格、每个 Agent 一次取 nonce，然后本地签名，减少 RPC 往返
+      const gasPrice = await publicClient.getGasPrice();
+      const maxFeePerGas = (gasPrice * 12n) / 10n;
+      const GAS = 240_000n;
+      const nonces = await Promise.all(
+        agents.map((w) =>
+          publicClient.getTransactionCount({ address: w.account!.address, blockTag: "pending" }),
+        ),
+      );
+      // 先全部签好，再同时发出
+      const signed = await Promise.all(
+        agents.map((w, i) =>
+          w.account!.signTransaction!({
+            type: "eip1559",
+            chainId: monadTestnet.id,
+            nonce: nonces[i],
+            to: address,
+            data,
+            value: 0n,
+            gas: GAS,
+            maxFeePerGas,
+            maxPriorityFeePerGas: maxFeePerGas - gasPrice,
+          }),
+        ),
+      );
+      const hashes = await Promise.all(
+        signed.map((raw) =>
+          publicClient.sendRawTransaction({ serializedTransaction: raw }).catch(() => null),
+        ),
+      );
+      const receipts = await Promise.all(
+        hashes.map((hash) =>
+          hash
+            ? publicClient.waitForTransactionReceipt({ hash, timeout: 30_000 }).catch(() => null)
+            : null,
+        ),
+      );
+      const results = receipts.flatMap((r, i) =>
+        r ? [summarize(`Agent ${i + 1} 付款 ${Number(each) / 1e18}`, r)] : [],
+      );
+      if (results.length === 0) throw new Error("并发交易都没有上链，请稍后再试");
+      const okCount = results.filter((r) => r.ok).length;
+      const after = await publicClient.readContract({
+        address,
+        abi: encumberAbi,
+        functionName: "getProjects",
+      });
+      const blocks = results.map((r) => BigInt(r.block));
+      const minB = blocks.reduce((a, b) => (b < a ? b : a));
+      const maxB = blocks.reduce((a, b) => (b > a ? b : a));
+      return NextResponse.json({
+        steps: [...steps, ...results],
+        stress: {
+          total: results.length,
+          ok: okCount,
+          rejected: results.length - okCount,
+          spent: (each * BigInt(okCount)).toString(),
+          budget: budget.toString(),
+          available: after[Number(pid)].available.toString(),
+          blockFrom: minB.toString(),
+          blockTo: maxB.toString(),
+        },
+      });
     } else if (step === "race") {
       // 甲剩下的钱：Agent 付款 和 财务调拨 同时提交，看谁先上链
       const { a, b } = await currentRound(address);
@@ -286,7 +376,7 @@ export async function POST(request: Request) {
             chain: monadTestnet,
             to: address,
             data: t.data,
-            gas: 200_000n,
+            gas: 260_000n,
           });
           return { label: t.label, raw: await t.wallet.signTransaction(req as never) };
         }),

@@ -27,7 +27,8 @@
     "abi": "cd contracts && forge build && cd .. && node scripts/gen-abi.mjs",
     "deploy": "bash scripts/deploy.sh",
     "bots": "node apps/web/scripts/bots.mjs",
-    "deploy:encumber": "cd contracts && forge build && cd .. && node apps/web/scripts/deploy-encumber.mjs"
+    "deploy:encumber": "cd contracts && forge build && cd .. && node apps/web/scripts/deploy-encumber.mjs",
+    "setup:stress": "node apps/web/scripts/setup-stress.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
