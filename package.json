@@ -24,7 +24,9 @@
     "lint:fix": "oxlint . --fix --deny-warnings",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "abi": "cd contracts && forge build && cd .. && node scripts/gen-abi.mjs"
+    "abi": "cd contracts && forge build && cd .. && node scripts/gen-abi.mjs",
+    "deploy": "bash scripts/deploy.sh",
+    "bots": "node apps/web/scripts/bots.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
