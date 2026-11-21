@@ -26,7 +26,8 @@
     "format:check": "oxfmt --check .",
     "abi": "cd contracts && forge build && cd .. && node scripts/gen-abi.mjs",
     "deploy": "bash scripts/deploy.sh",
-    "bots": "node apps/web/scripts/bots.mjs"
+    "bots": "node apps/web/scripts/bots.mjs",
+    "deploy:encumber": "cd contracts && forge build && cd .. && node apps/web/scripts/deploy-encumber.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
