@@ -61,7 +61,7 @@ function SlotCard({
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 items-center justify-center p-5">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center p-5">
         {vacant ? (
           <div className="text-center">
             <div className={`font-black text-emerald-400 ${big ? "text-6xl" : "text-3xl"}`}>
@@ -76,7 +76,7 @@ function SlotCard({
           <img
             src={slot.content}
             alt={`${slot.nickname}的图片`}
-            className="max-h-full max-w-full rounded-2xl object-contain"
+            className="absolute inset-0 h-full w-full object-contain p-3"
           />
         ) : slot.kind === KIND_VIDEO ? (
           <video
@@ -85,7 +85,7 @@ function SlotCard({
             muted
             loop
             playsInline
-            className="max-h-full max-w-full rounded-2xl object-contain"
+            className="absolute inset-0 h-full w-full object-contain p-3"
           />
         ) : (
           <p
