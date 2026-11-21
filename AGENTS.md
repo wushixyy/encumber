@@ -4,7 +4,7 @@
 
 ## 工作边界
 
-- 项目只有一个应用 `apps/web`（霸屏：玩家页、大屏页和 API），合约在 `contracts/`（Foundry）。项目规格见上级目录的 `docs/`。
+- 参赛项目是**预算锁 Encumber**：应用 `apps/web`（控制台首页和 `/api/demo`），合约 `contracts/src/Encumber.sol`（Foundry）。`HoldTheScreen.sol`、`/play`、`/screen` 是早期霸屏原型，与本项目无关。项目规格见上级目录的 `docs/`。
 - 使用 Bun Workspaces + Turborepo；依赖只用 Bun 管理，统一提交根目录 `bun.lock`。应用依赖用 `bun add --cwd apps/web <package>`，工具依赖放根目录。
 - TypeScript 配置共享于 `packages/typescript-config`。源码放 `apps/web/src/`，`@/*` 指向 `src/*`。
 - UI 封装按需放在 `src/components/ui/`，页面组合放在 `src/components/`。保留用户已有改动，不覆盖任务范围之外的代码。

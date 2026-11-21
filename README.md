@@ -4,7 +4,7 @@
 
 Monad Blitz 广州（2026-11-21）参赛项目 · 运行在 Monad 测试网
 
-- 🌐 在线控制台：https://hold-the-screen.vercel.app （公开访问为只读；演示操作需要口令）
+- 🌐 在线控制台：https://encumber.vercel.app （公开访问为只读；演示操作需要口令）
 - 📜 合约：[`0x58caf471a5b2cdc3f0151e731c1f9fc1043937b8`](https://testnet.monadvision.com/address/0x58caf471a5b2cdc3f0151e731c1f9fc1043937b8)（MonadVision、Monadscan 源码已验证）
 
 ## 解决什么问题
