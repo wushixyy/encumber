@@ -5,6 +5,7 @@ import {
   createWalletClient,
   decodeEventLog,
   encodeFunctionData,
+  keccak256,
   parseEther,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -289,11 +290,22 @@ export async function POST(request: Request) {
           }),
         ),
       );
-      const hashes = await Promise.all(
-        signed.map((raw) =>
-          publicClient.sendRawTransaction({ serializedTransaction: raw }).catch(() => null),
-        ),
-      );
+      // 公共 RPC 对瞬时并发有限流：失败就退避重发；节点已收到同一笔则直接用本地算出的哈希
+      const sendErrors: string[] = [];
+      const sendWithRetry = async (raw: Hex) => {
+        for (let attempt = 0; attempt < 5; attempt++) {
+          try {
+            return await publicClient.sendRawTransaction({ serializedTransaction: raw });
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (/already known|known transaction/i.test(msg)) return keccak256(raw);
+            if (attempt === 4) sendErrors.push(msg.split("\n")[0].slice(0, 160));
+            await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+          }
+        }
+        return null;
+      };
+      const hashes = await Promise.all(signed.map(sendWithRetry));
       const receipts = await Promise.all(
         hashes.map((hash) =>
           hash
@@ -325,6 +337,7 @@ export async function POST(request: Request) {
           available: after[Number(pid)].available.toString(),
           blockFrom: minB.toString(),
           blockTo: maxB.toString(),
+          sendErrors,
         },
       });
     } else if (step === "race") {
