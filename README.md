@@ -4,7 +4,7 @@
 
 Monad Blitz 广州（2026-11-21）参赛项目 · 运行在 Monad 测试网
 
-- 🌐 在线控制台：https://encumber.vercel.app （公开访问为只读；演示操作需要口令）
+- 🌐 在线控制台：https://encumber.vercel.app （**打开就能点「一键演示」自己试**，每一步都是 Monad 测试网上的真实交易；多人同时点会互相打断，刷新重来即可）
 - 🎬 演示视频（约 1 分 35 秒，带字幕）：https://encumber.vercel.app/encumber-demo.webm
 - 📜 合约：[`0x58caf471a5b2cdc3f0151e731c1f9fc1043937b8`](https://testnet.monadvision.com/address/0x58caf471a5b2cdc3f0151e731c1f9fc1043937b8)（MonadVision、Monadscan 源码已验证）
 
@@ -83,13 +83,13 @@ Monad Blitz 广州（2026-11-21）参赛项目 · 运行在 Monad 测试网
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 合约     | `contracts/src/Encumber.sol`，Solidity 0.8 + Foundry，13 个测试（供应商独立结算、只有指定供应商能结算、不超上限、只能结算一次、到期前谁也取消不了、过期可释放、两种先后顺序、已花留在原项目、金库余额守恒） |
 | 控制台   | Next.js 16 + viem，每秒读取 `getProjects()`、最新承诺和链上活动记录                                                                                                                                         |
-| 演示接口 | `/api/demo`：服务端用财务、两个 Agent、供应商和 20 个压测 Agent 的测试钱包按幕发交易，返回区块号和区块内序号；需要 `DEMO_KEY` 请求头，公开页面只读                                                          |
+| 演示接口 | `/api/demo`：服务端用财务、两个 Agent、供应商和 20 个压测 Agent 的测试钱包按幕发交易，返回区块号和区块内序号；公开可用，无需口令                                                                            |
 
 ```bash
 cd contracts && forge test --match-contract EncumberTest   # 合约测试
 bun run deploy:encumber                                     # 部署并初始化演示（写回 apps/web/.env.local）
 bun run setup:stress                                        # 幕四：建并发压测项目和 20 个 Agent（--topup 补 gas）
-bun dev:web                                                 # http://localhost:3000/?key=<DEMO_KEY>
+bun dev:web                                                 # http://localhost:3000
 ```
 
 所有代码均在活动当天编写，基于自有的 Next.js + Foundry 样板。

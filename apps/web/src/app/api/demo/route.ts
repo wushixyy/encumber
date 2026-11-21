@@ -136,11 +136,6 @@ async function currentRound(address: Address) {
 }
 
 export async function POST(request: Request) {
-  // 演示口令：只有带口令打开的控制台能发交易，其他人只读
-  const demoKey = process.env.DEMO_KEY;
-  if (demoKey && request.headers.get("x-demo-key") !== demoKey) {
-    return NextResponse.json({ error: "只读模式：需要演示口令" }, { status: 401 });
-  }
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "参数不正确" }, { status: 400 });
   const { step, first } = parsed.data;

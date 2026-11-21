@@ -236,7 +236,6 @@ export function EncumberConsole() {
     key: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [demoKey, setDemoKey] = useState<string>("");
   const [commit, setCommit] = useState<{
     id: bigint;
     vendor: string;
@@ -312,21 +311,8 @@ export function EncumberConsole() {
   }, []);
 
   useEffect(() => {
-    // 演示口令：?key=xxx 打开一次就记住，没有口令时只读
-    const t0 = setTimeout(() => {
-      try {
-        const fromUrl = new URLSearchParams(window.location.search).get("key");
-        if (fromUrl) localStorage.setItem("encumber:demo-key", fromUrl);
-        setDemoKey(fromUrl || localStorage.getItem("encumber:demo-key") || "");
-      } catch {
-        /* 忽略 */
-      }
-    }, 0);
     const tick = setInterval(() => setNow(Date.now()), 500);
-    return () => {
-      clearTimeout(t0);
-      clearInterval(tick);
-    };
+    return () => clearInterval(tick);
   }, []);
 
   useEffect(() => {
@@ -355,7 +341,7 @@ export function EncumberConsole() {
     try {
       const r = await fetch("/api/demo", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-demo-key": demoKey },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(beat.body),
       });
       const data = (await r.json()) as {
@@ -530,9 +516,6 @@ export function EncumberConsole() {
             >
               {running ? "演示进行中…" : "▶ 一键演示"}
             </button>
-            {!demoKey && (
-              <div className="text-center text-xs text-zinc-500">只读模式（演示需口令）</div>
-            )}
             {running && (
               <button
                 type="button"

@@ -22,7 +22,6 @@
         "DEMO_ROUND",
         "VENDOR_A_KEY",
         "VENDOR_B_KEY",
-        "DEMO_KEY",
         "STRESS_PROJECT_ID",
         "STRESS_AGENT_KEYS",
         "STRESS_BUDGET"
@@ -47,7 +46,6 @@
         "DEMO_ROUND",
         "VENDOR_A_KEY",
         "VENDOR_B_KEY",
-        "DEMO_KEY",
         "STRESS_PROJECT_ID",
         "STRESS_AGENT_KEYS",
         "STRESS_BUDGET"
@@ -72,7 +70,6 @@
         "DEMO_ROUND",
         "VENDOR_A_KEY",
         "VENDOR_B_KEY",
-        "DEMO_KEY",
         "STRESS_PROJECT_ID",
         "STRESS_AGENT_KEYS",
         "STRESS_BUDGET"
