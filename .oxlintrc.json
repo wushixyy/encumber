@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "react", "jsx-a11y", "nextjs"],
+  "categories": {
+    "correctness": "error"
+  },
+  "settings": {
+    "next": {
+      "rootDir": ["apps/web/"]
+    }
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/.turbo/**",
+    "**/out/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/playwright-report/**",
+    "**/test-results/**",
+    "**/next-env.d.ts",
+    "contracts/lib/**",
+    "contracts/out/**",
+    "contracts/cache/**",
+    "contracts/broadcast/**"
+  ]
+}

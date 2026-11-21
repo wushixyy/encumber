@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "skills": {
+    "mojo": {
+      "source": "nishuzumi/blitz-harness",
+      "commit": "1b83655d3d87b2bc9665184b076e47dcbd01309c",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/mojo/SKILL.md",
+      "computedHash": "a7520ac2a7b92055c9e569a59fcbbf76838cf9ef3d584eb70ec5898282760187"
+    },
+    "mojo-mentor": {
+      "source": "nishuzumi/blitz-harness",
+      "commit": "1b83655d3d87b2bc9665184b076e47dcbd01309c",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/mojo-mentor/SKILL.md",
+      "computedHash": "8fad16feeac5214dbf951dab93b136f06eb6e176d91ec88e454b9f2a5eb6cdd4"
+    },
+    "mojo-submit": {
+      "source": "nishuzumi/blitz-harness",
+      "commit": "1b83655d3d87b2bc9665184b076e47dcbd01309c",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/mojo-submit/SKILL.md",
+      "computedHash": "71b777e59db862fca9385684a3ecf047c91bb26e2b4e4eea9f8ca69396b46e34"
+    }
+  }
+}

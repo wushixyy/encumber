@@ -1,0 +1,51 @@
+{
+  "name": "hold-the-screen",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@repo/web",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "lint": "oxlint . --deny-warnings",
+    "typecheck": "tsc --noEmit --project tsconfig.json && turbo run typecheck",
+    "check": "bun run format:check && bun run lint && bun run typecheck && bun run knip && bun run test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
+    "audit": "bun audit",
+    "audit:prod": "bun audit --production",
+    "knip": "knip",
+    "lint:fix": "oxlint . --fix --deny-warnings",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "26.6.6",
+    "@vitejs/plugin-react": "6.3.0",
+    "drizzle-kit": "0.31.11",
+    "jsdom": "31.0.1",
+    "knip": "6.45.1",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
+    "turbo": "2.11.12",
+    "typescript": "5.9.3",
+    "vitest": "5.1.1"
+  },
+  "engines": {
+    "bun": ">=1.4.4",
+    "node": "^26.13.1"
+  },
+  "packageManager": "bun@1.4.4",
+  "trustedDependencies": [
+    "sharp"
+  ]
+}

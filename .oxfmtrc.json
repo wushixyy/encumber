@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "semi": true,
+  "singleQuote": false,
+  "sortTailwindcss": {
+    "functions": ["cn", "cva"]
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/.turbo/**",
+    "**/out/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/playwright-report/**",
+    "**/test-results/**",
+    "**/next-env.d.ts",
+    "bun.lock",
+    "contracts/lib/**",
+    "contracts/out/**",
+    "contracts/cache/**",
+    "contracts/broadcast/**"
+  ]
+}

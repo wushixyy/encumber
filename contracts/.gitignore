@@ -1,0 +1,8 @@
+# Foundry 编译产物
+cache/
+out/
+
+# 本地链（anvil）的部署记录
+broadcast/*/31337/
+
+.env
