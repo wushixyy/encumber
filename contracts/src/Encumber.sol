@@ -3,7 +3,9 @@ pragma solidity ^0.8.28;
 
 /// @title Encumber 预算锁
 /// @notice Agent 团队的链上项目预算：每个项目的预算分成「已花 / 已预占 / 可用」三态，由合约实时维护。
-///         - Agent 调用按量计费的服务前先预占上限，完成后按实际结算，剩余自动释放回项目
+///         - Agent 调用按量计费的服务前锁定一笔付款承诺：绑定指定供应商、订单号和截止时间
+///         - 截止前只有该供应商能按实际用量结算（不超过上限、只能一次），Agent 掉线、财务取消都不影响供应商收款
+///         - 结算后剩余自动释放回项目；过期未结算的承诺任何人都能释放
 ///         - 财务调拨只能调走「未花且未预占」的部分，已花的留在原项目，已预占的谁也挪不走
 ///         - 付款与调拨同时发生时按链上先后顺序判定，被拒的一方留下带原因的拦截记录（不 revert）
 contract Encumber {
@@ -19,11 +21,15 @@ contract Encumber {
         uint256 spent; // 已实际付出
     }
 
+    /// @notice 付款承诺：锁定的上限只能由指定供应商在截止前兑现
     struct Reservation {
-        address agent;
+        address agent; // 发起锁款的 Agent
+        address vendor; // 唯一能结算的供应商
         uint32 projectId;
+        uint64 deadline; // 截止时间（秒）
         bool open;
-        uint256 amount;
+        uint256 amount; // 锁定上限
+        bytes32 orderId; // 订单号
     }
 
     /// @notice 操作类型（用于活动记录）
@@ -43,10 +49,12 @@ contract Encumber {
         NotAgent, // 调用者不是任何项目的 Agent
         InsufficientAvailable, // 可用余额不足
         FundsReserved, // 想调走的钱已被预占
-        NotReservationOwner, // 不是这笔预占的 Agent
-        ReservationClosed, // 预占已结算或释放
-        ExceedsReservation, // 实际花费超过预占上限
-        UnknownProject // 项目不存在
+        NotVendor, // 不是这笔承诺指定的供应商
+        ReservationClosed, // 承诺已结算或释放
+        ExceedsReservation, // 实际花费超过锁定上限
+        UnknownProject, // 项目不存在
+        CommitmentActive, // 承诺还没到期，不能取消
+        CommitmentExpired // 承诺已过期，不能再结算
     }
 
     /// @notice 一条活动记录（链上环形缓冲区，控制台刷新也能完整恢复）
@@ -105,6 +113,8 @@ contract Encumber {
         uint256 indexed reservationId, uint256 indexed projectId, address indexed agent, uint256 actual, uint256 released
     );
     event Released(uint256 indexed reservationId, uint256 indexed projectId, uint256 amount);
+    /// @notice 付款承诺已锁定：供应商看到这条事件就可以开工
+    event Committed(uint256 indexed reservationId, address indexed vendor, bytes32 indexed orderId, uint256 deadline);
     event Paid(uint256 indexed projectId, address indexed agent, address indexed payee, uint256 amount);
     /// @notice 被合约拦下的操作：状态不变，原因写在链上，审计方可查
     event Rejected(
@@ -198,8 +208,8 @@ contract Encumber {
     // Agent
     // ---------------------------------------------------------------------
 
-    /// @notice 预占一笔上限（按量计费服务开工前调用），返回预占编号；被拒时返回 type(uint256).max
-    function reserve(uint256 amount) external returns (uint256 reservationId) {
+    /// @notice Agent 锁定一笔付款承诺：绑定本项目的供应商、订单号和有效期，返回承诺编号；被拒时返回 type(uint256).max
+    function reserve(uint256 amount, bytes32 orderId, uint256 ttlSeconds) external returns (uint256 reservationId) {
         uint256 pid = _agentProject[msg.sender];
         if (pid == 0) {
             _reject(Action.Reserve, Reason.NotAgent, 0, 0, amount, 0);
@@ -211,22 +221,37 @@ contract Encumber {
             _reject(Action.Reserve, Reason.InsufficientAvailable, pid, pid, amount, 0);
             return type(uint256).max;
         }
+        if (ttlSeconds == 0) ttlSeconds = 600;
         p.reserved += amount;
         reservationId = _reservations.length;
-        _reservations.push(Reservation({agent: msg.sender, projectId: uint32(pid), open: true, amount: amount}));
+        _reservations.push(
+            Reservation({
+                agent: msg.sender,
+                vendor: p.payee,
+                projectId: uint32(pid),
+                deadline: uint64(block.timestamp + ttlSeconds),
+                open: true,
+                amount: amount,
+                orderId: orderId
+            })
+        );
         emit Reserved(reservationId, pid, msg.sender, amount);
+        emit Committed(reservationId, p.payee, orderId, block.timestamp + ttlSeconds);
         _record(Action.Reserve, Reason.None, pid, pid, amount, reservationId);
     }
 
-    /// @notice 按实际花费结算预占：付给项目收款方，剩余自动释放回项目可用余额
+    /// @notice 供应商按实际用量兑现承诺：截止前只有指定供应商能调用，不超过上限，只能一次；剩余自动释放回项目
     function settle(uint256 reservationId, uint256 actual) external nonReentrant returns (bool) {
         if (reservationId >= _reservations.length) {
             return _reject(Action.Settle, Reason.ReservationClosed, 0, 0, actual, reservationId);
         }
         Reservation storage r = _reservations[reservationId];
         uint256 pid = r.projectId;
-        if (r.agent != msg.sender) return _reject(Action.Settle, Reason.NotReservationOwner, pid, pid, actual, reservationId);
+        if (r.vendor != msg.sender) return _reject(Action.Settle, Reason.NotVendor, pid, pid, actual, reservationId);
         if (!r.open) return _reject(Action.Settle, Reason.ReservationClosed, pid, pid, actual, reservationId);
+        if (block.timestamp > r.deadline) {
+            return _reject(Action.Settle, Reason.CommitmentExpired, pid, pid, actual, reservationId);
+        }
         if (actual > r.amount) return _reject(Action.Settle, Reason.ExceedsReservation, pid, pid, actual, reservationId);
 
         Project storage p = _projects[pid];
@@ -236,7 +261,7 @@ contract Encumber {
         p.spent += actual;
         p.allocated -= actual; // 已花的钱离开金库，留在原项目的账上（spent）
 
-        emit Settled(reservationId, pid, msg.sender, actual, released);
+        emit Settled(reservationId, pid, r.agent, actual, released);
         _record(Action.Settle, Reason.None, pid, pid, actual, reservationId);
         if (released > 0) {
             emit Released(reservationId, pid, released);
@@ -246,17 +271,17 @@ contract Encumber {
         return true;
     }
 
-    /// @notice 取消预占（任务没执行），全部释放
+    /// @notice 释放承诺：到期前只有供应商能主动放弃；到期后任何人都能释放（Agent 和财务在到期前都取消不了）
     function release(uint256 reservationId) external returns (bool) {
         if (reservationId >= _reservations.length) {
             return _reject(Action.Release, Reason.ReservationClosed, 0, 0, 0, reservationId);
         }
         Reservation storage r = _reservations[reservationId];
         uint256 pid = r.projectId;
-        if (r.agent != msg.sender && msg.sender != owner) {
-            return _reject(Action.Release, Reason.NotReservationOwner, pid, pid, r.amount, reservationId);
-        }
         if (!r.open) return _reject(Action.Release, Reason.ReservationClosed, pid, pid, r.amount, reservationId);
+        if (block.timestamp <= r.deadline && msg.sender != r.vendor) {
+            return _reject(Action.Release, Reason.CommitmentActive, pid, pid, r.amount, reservationId);
+        }
         r.open = false;
         _projects[pid].reserved -= r.amount;
         emit Released(reservationId, pid, r.amount);
