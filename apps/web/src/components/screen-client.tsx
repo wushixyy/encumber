@@ -1,8 +1,7 @@
 "use client";
 
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { Address } from "viem";
+import { useEffect, useState } from "react";
 import { holdTheScreenAbi } from "@/lib/abi";
 import { CONTRACT_ADDRESS, formatMon, publicClient, shortAddress, txUrl } from "@/lib/chain";
 import {
@@ -20,7 +19,6 @@ type FeedItem = {
   nickname: string;
   prevNickname: string | null;
   price: bigint;
-  txHash: string;
 };
 
 const SLOT_WORDS = ["主位", "小格 1", "小格 2"];
@@ -122,13 +120,15 @@ export function ScreenClient() {
   const [now, setNow] = useState(() => Date.now());
   const [blockNumber, setBlockNumber] = useState<bigint | null>(null);
   const [feed, setFeed] = useState<FeedItem[]>([]);
-  const [names, setNames] = useState<Record<string, string>>({});
-  const [stats, setStats] = useState<{ takeovers: bigint; prizePool: bigint } | null>(null);
-  const [held, setHeld] = useState<Record<string, bigint>>({});
+  const [stats, setStats] = useState<{
+    takeovers: bigint;
+    prizePool: bigint;
+    participants: bigint;
+  } | null>(null);
+  const [board, setBoard] = useState<{ addr: string; name: string; secs: bigint }[]>([]);
+  const [latestTx, setLatestTx] = useState<string | null>(null);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [playUrl, setPlayUrl] = useState("");
-  const lastBlock = useRef<bigint | null>(null);
-  const namesRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     const first = setTimeout(() => setPlayUrl(`${window.location.origin}/play`), 0);
@@ -151,117 +151,75 @@ export function ScreenClient() {
     return () => clearInterval(t);
   }, []);
 
-  // 抢屏事件：每 1.5 秒增量拉取
+  // 抢屏动态、排行榜、统计：全部直接从合约读（链上历史），刷新页面也不会丢
   useEffect(() => {
     if (!CONTRACT_ADDRESS) return;
-    let stop = false;
     const tick = async () => {
       try {
-        const latest = await publicClient.getBlockNumber({ cacheTime: 0 });
-        const from =
-          lastBlock.current === null ? (latest > 90n ? latest - 90n : 0n) : lastBlock.current + 1n;
-        if (from > latest) return;
-        const logs = await publicClient.getContractEvents({
-          address: CONTRACT_ADDRESS!,
-          abi: holdTheScreenAbi,
-          eventName: "TakeOver",
-          fromBlock: from,
-          toBlock: latest,
-        });
-        lastBlock.current = latest;
-        if (stop || logs.length === 0) return;
-        const items: FeedItem[] = [];
-        for (const log of logs) {
-          const a = log.args;
-          if (!a.newHolder) continue;
-          const prev =
-            a.prevHolder && a.prevHolder !== "0x0000000000000000000000000000000000000000"
-              ? a.prevHolder
-              : null;
-          items.push({
-            key: `${log.transactionHash}-${log.logIndex}`,
-            slotId: Number(a.slotId ?? 0n),
-            nickname: a.nickname || shortAddress(a.newHolder),
-            prevNickname: prev ? namesRef.current[prev.toLowerCase()] || shortAddress(prev) : null,
-            price: a.newPrice ?? 0n,
-            txHash: log.transactionHash,
-          });
-          namesRef.current[a.newHolder.toLowerCase()] = a.nickname || shortAddress(a.newHolder);
-        }
-        setNames({ ...namesRef.current });
-        setFeed((f) => [...items.reverse(), ...f].slice(0, 8));
+        const base = { address: CONTRACT_ADDRESS!, abi: holdTheScreenAbi } as const;
+        const [history, leaderboard, takeovers, prizePool, participants] = await Promise.all([
+          publicClient.readContract({ ...base, functionName: "getHistory" }),
+          publicClient.readContract({ ...base, functionName: "getLeaderboard" }),
+          publicClient.readContract({ ...base, functionName: "totalTakeovers" }),
+          publicClient.readContract({ ...base, functionName: "prizePool" }),
+          publicClient.readContract({ ...base, functionName: "participantCount" }),
+        ]);
+        setFeed(
+          history.slice(0, 8).map((r, i) => ({
+            key: (takeovers - BigInt(i)).toString(),
+            slotId: Number(r.slotId),
+            nickname: r.nickname || shortAddress(r.holder),
+            prevNickname:
+              r.prevHolder === "0x0000000000000000000000000000000000000000"
+                ? null
+                : r.prevNickname || shortAddress(r.prevHolder),
+            price: r.price,
+          })),
+        );
+        const [players, names, secs] = leaderboard;
+        setBoard(
+          players
+            .map((addr, i) => ({ addr, name: names[i] || shortAddress(addr), secs: secs[i] }))
+            .filter((row) => row.secs > 0n)
+            .sort((a, b) => (b.secs > a.secs ? 1 : b.secs < a.secs ? -1 : 0))
+            .slice(0, 5),
+        );
+        setStats({ takeovers, prizePool, participants });
       } catch {
         /* 忽略单次失败 */
       }
     };
     void tick();
     const t = setInterval(tick, 1500);
-    return () => {
-      stop = true;
-      clearInterval(t);
-    };
+    return () => clearInterval(t);
   }, []);
 
-  // 统计 + 排行榜（一次 multicall）
+  // 最新一笔抢屏交易的哈希（只看最近约 30 秒的事件，用于“查看最新交易”按钮）
   useEffect(() => {
     if (!CONTRACT_ADDRESS) return;
     const tick = async () => {
-      const addrs = Object.keys(namesRef.current) as Address[];
       try {
-        const [takeovers, prizePool, secs] = await Promise.all([
-          publicClient.readContract({
-            address: CONTRACT_ADDRESS!,
-            abi: holdTheScreenAbi,
-            functionName: "totalTakeovers",
-          }),
-          publicClient.readContract({
-            address: CONTRACT_ADDRESS!,
-            abi: holdTheScreenAbi,
-            functionName: "prizePool",
-          }),
-          addrs.length === 0
-            ? Promise.resolve([] as bigint[])
-            : publicClient
-                .multicall({
-                  allowFailure: false,
-                  contracts: addrs.map((a) => ({
-                    address: CONTRACT_ADDRESS!,
-                    abi: holdTheScreenAbi,
-                    functionName: "totalHeldSeconds" as const,
-                    args: [a] as const,
-                  })),
-                })
-                .catch(() => [] as bigint[]),
-        ]);
-        setStats({ takeovers, prizePool });
-        setHeld(Object.fromEntries(addrs.map((a, i) => [a, secs[i]])));
+        const latest = await publicClient.getBlockNumber({ cacheTime: 0 });
+        const logs = await publicClient.getContractEvents({
+          address: CONTRACT_ADDRESS!,
+          abi: holdTheScreenAbi,
+          eventName: "TakeOver",
+          fromBlock: latest > 90n ? latest - 90n : 0n,
+          toBlock: latest,
+        });
+        const last = logs.at(-1);
+        if (last) setLatestTx(last.transactionHash);
       } catch {
         /* 忽略 */
       }
     };
     void tick();
-    const t = setInterval(tick, 3000);
+    const t = setInterval(tick, 2000);
     return () => clearInterval(t);
   }, []);
 
-  const leaderboard = useMemo(() => {
-    const nowSec = BigInt(Math.floor(now / 1000));
-    const totals: Record<string, bigint> = { ...held };
-    const nameMap: Record<string, string> = { ...names };
-    for (const s of slots ?? []) {
-      if (isVacant(s)) continue;
-      const k = s.holder.toLowerCase();
-      totals[k] = (totals[k] ?? 0n) + (nowSec > s.lastSettled ? nowSec - s.lastSettled : 0n);
-      if (!nameMap[k]) nameMap[k] = s.nickname;
-    }
-    return Object.entries(totals)
-      .filter(([, v]) => v > 0n)
-      .sort((a, b) => (b[1] > a[1] ? 1 : -1))
-      .slice(0, 5)
-      .map(([addr, secs]) => ({ addr, name: nameMap[addr] || shortAddress(addr), secs }));
-  }, [held, slots, names, now]);
-
-  const participants = Object.keys(names).length;
+  const leaderboard = board;
+  const participants = stats ? stats.participants.toString() : "–";
   const hideKey = (s: SlotState | undefined) => (s ? `${s.id}:${s.holder}:${s.content}` : "");
   const toggleHide = (s: SlotState | undefined) => {
     const k = hideKey(s);
@@ -336,9 +294,9 @@ export function ScreenClient() {
         <div className="min-h-0 flex-1 overflow-hidden rounded-3xl bg-zinc-900 p-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="font-bold">抢屏动态</span>
-            {feed[0] && (
+            {latestTx && (
               <a
-                href={txUrl(feed[0].txHash)}
+                href={txUrl(latestTx)}
                 target="_blank"
                 rel="noreferrer"
                 className="rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-zinc-950"
