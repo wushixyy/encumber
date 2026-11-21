@@ -16,3 +16,4 @@ next-env.d.ts
 
 # 机器人观众的私钥
 .bots.json
+.vercel

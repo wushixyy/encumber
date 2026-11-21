@@ -1,0 +1,22 @@
+# 本地密钥和凭证，绝不上传
+.env*
+!.env.example
+**/.env*
+!**/.env.example
+contracts/.env
+.mojo
+**/.bots.json
+# 构建产物和无关目录
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+contracts/out
+contracts/cache
+contracts/broadcast
+contracts/lib
+playwright-report
+test-results
+.claude
