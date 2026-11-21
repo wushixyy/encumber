@@ -283,12 +283,19 @@ export function EncumberConsole() {
         (a) => a !== own.toLowerCase() && !(a in namesRef.current),
       );
       if (unknown.length) {
-        const ns = await Promise.all(
-          unknown.map((a) =>
-            publicClient.readContract({ ...base, functionName: "agentName", args: [a as Address] }),
-          ),
-        );
-        unknown.forEach((a, i) => (namesRef.current[a] = ns[i] || shortAddress(a)));
+        // 一次 multicall 查完所有名字；单个失败不影响其他，失败的下次再查
+        const ns = await publicClient.multicall({
+          allowFailure: true,
+          contracts: unknown.map((a) => ({
+            ...base,
+            functionName: "agentName" as const,
+            args: [a as Address] as const,
+          })),
+        });
+        unknown.forEach((a, i) => {
+          const r = ns[i];
+          if (r.status === "success") namesRef.current[a] = r.result || shortAddress(a);
+        });
         setNames({ ...namesRef.current });
       }
     } catch {
@@ -335,6 +342,7 @@ export function EncumberConsole() {
     const beat = SCRIPT[i];
     setBeatIndex(i);
     setError(null);
+    setBanner(null); // 新的一步开始，清掉上一步的结论横幅
     setLastSteps([]); // 新的一步开始，先清掉上一步的交易，避免面板显示旧数据
     try {
       const r = await fetch("/api/demo", {
@@ -399,7 +407,7 @@ export function EncumberConsole() {
       if (stopRef.current) break;
       const ok = await runBeat(i);
       if (!ok) break;
-      await new Promise((r) => setTimeout(r, 2200)); // 给观众读旁白的时间
+      await new Promise((r) => setTimeout(r, 4500)); // 给演讲者讲一句话的时间
     }
     setRunning(false);
   }
@@ -490,7 +498,7 @@ export function EncumberConsole() {
                   财务调预算的同时，Agent 正在花同一笔钱，算谁的？
                 </div>
                 <div className="mt-1 text-zinc-300">
-                  点「一键演示」，三幕看合约如何用「已花 / 已预占 /
+                  点「一键演示」，四幕看合约如何用「已花 / 已预占 /
                   可用」三态账本，保证同一份预算只被承诺一次。
                 </div>
               </div>

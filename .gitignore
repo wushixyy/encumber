@@ -17,3 +17,6 @@ next-env.d.ts
 # 机器人观众的私钥
 .bots.json
 .vercel
+
+# 演示视频只随 Vercel 部署，不进仓库（约 20MB）
+apps/web/public/encumber-demo.webm
