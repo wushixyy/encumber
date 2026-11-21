@@ -55,6 +55,8 @@ type Beat = {
   story: string;
   body: Record<string, string>;
   expect: "ok" | "blocked" | "race" | "stress";
+  /** 这一步做完后横幅上的结论 */
+  done?: string;
 };
 
 /** 自动演示的剧本：每一步都有旁白，评委不用提问也能看懂 */
@@ -66,6 +68,7 @@ const SCRIPT: Beat[] = [
       "团队金库存入 0.1 MON：客服项目（甲）0.06，数据项目（乙）0.04。每个项目绑定自己的 AI Agent 和供应商。",
     body: { step: "reset" },
     expect: "ok",
+    done: "预算分好了：甲 0.06、乙 0.04",
   },
   {
     act: "准备",
@@ -73,6 +76,7 @@ const SCRIPT: Beat[] = [
     story: "数据 Agent 花光了乙的 0.04；客服 Agent 花了 0.04，甲只剩 0.02。",
     body: { step: "setup" },
     expect: "ok",
+    done: "乙花完了，甲只剩 0.02",
   },
   {
     act: "幕一",
@@ -81,6 +85,7 @@ const SCRIPT: Beat[] = [
       "按 token 计费，事先不知道要花多少：Agent 锁定 0.02 上限，绑定指定供应商、订单号和 10 分钟截止。供应商在链上看到锁款，就敢开工。",
     body: { step: "reserve" },
     expect: "ok",
+    done: "已锁定 0.02：承诺绑定了供应商、订单号和截止时间",
   },
   {
     act: "幕一",
@@ -96,6 +101,7 @@ const SCRIPT: Beat[] = [
       "Agent 不在线也没关系：供应商用自己的钱包按实际用量结算。同一笔交易里，供应商到账 0.012，剩下的 0.008 回到甲的「可用」。",
     body: { step: "settle" },
     expect: "ok",
+    done: "供应商到账 0.012，剩下的 0.008 已回到甲",
   },
   {
     act: "幕二",
@@ -103,6 +109,7 @@ const SCRIPT: Beat[] = [
     story: "调拨只动「未花且未预占」的部分。已花的 0.052 永远留在甲的账上。",
     body: { step: "realloc-released" },
     expect: "ok",
+    done: "0.008 已调给乙；已花的 0.052 留在甲",
   },
   {
     act: "幕三",
@@ -110,6 +117,7 @@ const SCRIPT: Beat[] = [
     story: "重新分配预算：甲 0.06、乙 0.04。",
     body: { step: "reset" },
     expect: "ok",
+    done: "新一轮摆好了：甲 0.06、乙 0.04",
   },
   {
     act: "幕三",
@@ -384,13 +392,22 @@ export function EncumberConsole() {
           key: Date.now(),
         });
       } else if (last && !last.ok) {
+        const reasons = data.steps.filter((s) => !s.ok).map((s) => s.reason ?? "被拒绝");
         setBanner({
           kind: "blocked",
-          text: `合约拦截：${last.reason ?? "被拒绝"}`,
+          text:
+            reasons.length > 1
+              ? `合约拦截 ${reasons.length} 次：${reasons.join(" · ")}`
+              : `合约拦截：${reasons[0]}`,
           key: Date.now(),
         });
       } else if (last) {
-        setBanner({ kind: "ok", text: `${last.label} · 已上链`, key: Date.now() });
+        const n = data.steps.length;
+        setBanner({
+          kind: "ok",
+          text: `${beat.done ?? last.label} · ${n > 1 ? `${n} 笔交易已上链` : "已上链"}`,
+          key: Date.now(),
+        });
       }
       void refresh();
       return true;
