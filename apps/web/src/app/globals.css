@@ -1,3 +1,55 @@
 @layer ui-sdk;
 
 @import "tailwindcss";
+
+@theme {
+  --animate-shake: shake 0.5s ease-in-out;
+  --animate-stripes: stripes 1s linear infinite;
+  --animate-rise: rise 0.4s ease-out;
+  --animate-glow: glow 2.4s ease-in-out infinite;
+
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20%,
+    60% {
+      transform: translateX(-8px);
+    }
+    40%,
+    80% {
+      transform: translateX(8px);
+    }
+  }
+
+  @keyframes stripes {
+    from {
+      background-position: 0 0;
+    }
+    to {
+      background-position: 28px 0;
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes glow {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+}
