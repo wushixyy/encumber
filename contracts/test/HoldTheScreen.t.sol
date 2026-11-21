@@ -179,6 +179,52 @@ contract HoldTheScreenTest is Test {
         screen.fundPlayers{value: 0.1 ether}(players, 0.05 ether);
     }
 
+    function test_HistoryNewestFirstWithNicknames() public {
+        vm.prank(alice);
+        screen.takeOver{value: 1 ether}(0, unicode"小王", 0, "a", 1 ether);
+        vm.prank(bob);
+        screen.takeOver{value: 2 ether}(0, unicode"小李", 0, "b", 0.5 ether);
+
+        HoldTheScreen.RecordView[] memory h = screen.getHistory();
+        assertEq(h.length, 2);
+        assertEq(h[0].holder, bob);
+        assertEq(h[0].nickname, unicode"小李");
+        assertEq(h[0].prevHolder, alice);
+        assertEq(h[0].prevNickname, unicode"小王");
+        assertEq(h[0].price, 0.5 ether);
+        assertEq(h[1].holder, alice);
+        assertEq(h[1].prevHolder, address(0));
+    }
+
+    function test_HistoryKeepsOnlyLatestTwenty() public {
+        for (uint256 i = 0; i < 25; i++) {
+            vm.warp(block.timestamp + 1);
+            address who = i % 2 == 0 ? alice : bob;
+            vm.prank(who);
+            screen.takeOver{value: 0.5 ether}(1, "x", 0, "y", 0.01 ether + i * 0.001 ether);
+        }
+        HoldTheScreen.RecordView[] memory h = screen.getHistory();
+        assertEq(h.length, 20);
+        assertEq(h[0].price, 0.01 ether + 24 * 0.001 ether); // 最新一条
+        assertEq(h[19].price, 0.01 ether + 5 * 0.001 ether); // 第 6 条（前 5 条被覆盖）
+        assertEq(screen.participantCount(), 2);
+    }
+
+    function test_LeaderboardIncludesLiveSeconds() public {
+        _take(alice, 0, 1 ether, 1 ether); // 押金够 100 秒
+        vm.warp(block.timestamp + 10);
+        _take(bob, 0, 2 ether, 1 ether); // alice 结算 10 秒
+        vm.warp(block.timestamp + 7); // bob 实时 7 秒
+
+        (address[] memory players, string[] memory names, uint256[] memory secs) = screen.getLeaderboard();
+        assertEq(players.length, 2);
+        assertEq(players[0], alice);
+        assertEq(secs[0], 10);
+        assertEq(players[1], bob);
+        assertEq(secs[1], 7);
+        assertEq(names[1], "nick");
+    }
+
     function test_WithdrawPrize() public {
         _take(alice, 0, 1 ether, 1 ether);
         vm.warp(block.timestamp + 10);

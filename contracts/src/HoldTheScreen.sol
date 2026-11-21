@@ -48,6 +48,29 @@ contract HoldTheScreen {
         string content;
     }
 
+    /// @dev 一条抢屏记录（打包成 2 个存储槽）
+    struct Record {
+        uint64 time;
+        uint8 slotId;
+        address holder;
+        address prevHolder;
+        uint96 price;
+    }
+
+    /// @notice 给前端读的抢屏记录（带昵称）
+    struct RecordView {
+        uint256 time;
+        uint256 slotId;
+        address holder;
+        address prevHolder;
+        uint256 price;
+        string nickname;
+        string prevNickname;
+    }
+
+    /// @notice 链上只保留最近这么多条抢屏记录（环形缓冲区）
+    uint256 public constant HISTORY_SIZE = 20;
+
     address public owner;
     address public venue;
     uint256 public venueShareBps;
@@ -59,6 +82,12 @@ contract HoldTheScreen {
     mapping(address => uint256) public totalHeldSeconds;
     /// @notice 转账失败时记账，之后可以自己提取
     mapping(address => uint256) public pendingWithdrawals;
+    /// @notice 每个地址最近一次使用的昵称
+    mapping(address => string) public nicknameOf;
+
+    Record[HISTORY_SIZE] private _history;
+    address[] private _participants;
+    mapping(address => bool) private _isParticipant;
 
     bool private _locked;
 
@@ -166,7 +195,23 @@ contract HoldTheScreen {
         s.deposit = msg.value - cost;
         s.nickname = nickname;
         s.content = content;
+
+        // 链上历史：最近 20 条抢屏记录 + 参与者名单，大屏刷新后也能完整恢复
+        _history[totalTakeovers % HISTORY_SIZE] = Record({
+            time: uint64(block.timestamp),
+            slotId: uint8(slotId),
+            holder: msg.sender,
+            prevHolder: prev,
+            price: uint96(newPrice)
+        });
         totalTakeovers += 1;
+        if (keccak256(bytes(nicknameOf[msg.sender])) != keccak256(bytes(nickname))) {
+            nicknameOf[msg.sender] = nickname;
+        }
+        if (!_isParticipant[msg.sender]) {
+            _isParticipant[msg.sender] = true;
+            _participants.push(msg.sender);
+        }
 
         emit TakeOver(slotId, prev, msg.sender, nickname, kind, content, newPrice, cost);
 
@@ -223,6 +268,60 @@ contract HoldTheScreen {
 
     function getSlot(uint256 slotId) external view validSlot(slotId) returns (SlotView memory) {
         return _view(slotId);
+    }
+
+    /// @notice 最近的抢屏记录，最新的排在最前面
+    function getHistory() external view returns (RecordView[] memory records) {
+        uint256 n = totalTakeovers < HISTORY_SIZE ? totalTakeovers : HISTORY_SIZE;
+        records = new RecordView[](n);
+        for (uint256 i = 0; i < n; i++) {
+            Record storage r = _history[(totalTakeovers - 1 - i) % HISTORY_SIZE];
+            records[i] = RecordView({
+                time: r.time,
+                slotId: r.slotId,
+                holder: r.holder,
+                prevHolder: r.prevHolder,
+                price: r.price,
+                nickname: nicknameOf[r.holder],
+                prevNickname: r.prevHolder == address(0) ? "" : nicknameOf[r.prevHolder]
+            });
+        }
+    }
+
+    function participantCount() external view returns (uint256) {
+        return _participants.length;
+    }
+
+    /// @notice 排行榜数据：所有参与者的昵称和霸屏总秒数（含正在霸屏的实时秒数）
+    function getLeaderboard()
+        external
+        view
+        returns (address[] memory players, string[] memory names, uint256[] memory heldSeconds)
+    {
+        uint256 n = _participants.length;
+        players = new address[](n);
+        names = new string[](n);
+        heldSeconds = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            address p = _participants[i];
+            players[i] = p;
+            names[i] = nicknameOf[p];
+            heldSeconds[i] = totalHeldSeconds[p];
+        }
+        // 加上当前霸主还没结算的秒数
+        for (uint256 s = 0; s < SLOT_COUNT; s++) {
+            Slot storage slot = _slots[s];
+            if (slot.holder == address(0)) continue;
+            uint256 elapsed = block.timestamp - slot.lastSettled;
+            uint256 taxPerSecond = (slot.price * TAX_BPS_PER_SECOND) / BPS;
+            if (taxPerSecond > 0 && elapsed * taxPerSecond > slot.deposit) elapsed = slot.deposit / taxPerSecond;
+            for (uint256 i = 0; i < n; i++) {
+                if (players[i] == slot.holder) {
+                    heldSeconds[i] += elapsed;
+                    break;
+                }
+            }
+        }
     }
 
     // ---------------------------------------------------------------------
