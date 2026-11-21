@@ -14,10 +14,12 @@ const REASONS = [
   "调用者不是 Agent",
   "可用余额不足",
   "这笔钱已被预占",
-  "不是这笔预占的 Agent",
-  "预占已结算或释放",
-  "实际花费超过预占上限",
+  "不是这笔承诺指定的供应商",
+  "承诺已结算或释放",
+  "实际花费超过锁定上限",
   "项目不存在",
+  "承诺还没到期，谁也取消不了",
+  "承诺已过期",
 ];
 
 type Project = {
@@ -61,7 +63,7 @@ const SCRIPT: Beat[] = [
     act: "准备",
     title: "团队给两个项目分预算",
     story:
-      "团队金库存入 0.1 MON：客服项目（甲）0.06，数据项目（乙）0.04。每个项目绑定自己的 AI Agent。",
+      "团队金库存入 0.1 MON：客服项目（甲）0.06，数据项目（乙）0.04。每个项目绑定自己的 AI Agent 和供应商。",
     body: { step: "reset" },
     expect: "ok",
   },
@@ -74,29 +76,31 @@ const SCRIPT: Beat[] = [
   },
   {
     act: "幕一",
-    title: "Agent 调用大模型前，先预占 0.02",
-    story: "按 token 计费，事先不知道要花多少，所以先锁住上限。这 0.02 现在处于「已预占」状态。",
+    title: "Agent 锁款 0.02，下单给大模型供应商",
+    story:
+      "按 token 计费，事先不知道要花多少：Agent 锁定 0.02 上限，绑定指定供应商、订单号和 10 分钟截止。供应商在链上看到锁款，就敢开工。",
     body: { step: "reserve" },
     expect: "ok",
   },
   {
     act: "幕一",
-    title: "财务想把甲这 0.02 调给乙",
-    story: "乙的钱花完了，财务想挪甲的。但这笔钱已被 Agent 预占，合约会拦下吗？",
-    body: { step: "reallocate" },
+    title: "Agent 掉线了。财务想取消承诺、把钱调走",
+    story: "乙的钱花完了，财务想挪甲的 0.02：先取消这笔承诺，再调给乙。承诺到期前，合约会放行吗？",
+    body: { step: "finance-cancel" },
     expect: "blocked",
   },
   {
     act: "幕二",
-    title: "Agent 按实际花费 0.012 结算",
-    story: "任务完成，实际只花了 0.012。合约付款给服务商，剩下的 0.008 自动释放回甲的「可用」。",
+    title: "供应商自己结算：实际用了 0.012",
+    story:
+      "Agent 不在线也没关系：供应商用自己的钱包按实际用量结算。同一笔交易里，供应商到账 0.012，剩下的 0.008 回到甲的「可用」。",
     body: { step: "settle" },
     expect: "ok",
   },
   {
     act: "幕二",
-    title: "财务调拨释放出来的 0.008",
-    story: "这次只调「未花且未预占」的部分。已花的 0.052 永远留在甲的账上。",
+    title: "财务只能拿回剩下的 0.008",
+    story: "调拨只动「未花且未预占」的部分。已花的 0.052 永远留在甲的账上。",
     body: { step: "realloc-released" },
     expect: "ok",
   },
@@ -116,6 +120,28 @@ const SCRIPT: Beat[] = [
     expect: "race",
   },
 ];
+
+function orderText(hex: string): string {
+  try {
+    const bytes = hex.slice(2).match(/.{2}/g) ?? [];
+    const text = bytes
+      .map((b) => parseInt(b, 16))
+      .filter((c) => c > 0)
+      .map((c) => String.fromCharCode(c))
+      .join("");
+    return text || hex.slice(0, 10);
+  } catch {
+    return hex.slice(0, 10);
+  }
+}
+
+function countdown(deadline: bigint, now: number): string {
+  const left = Number(deadline) - Math.floor(now / 1000);
+  if (left <= 0) return "已到期";
+  const m = Math.floor(left / 60);
+  const sec = left % 60;
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
 
 function Bar({ p }: { p: Project }) {
   const total = p.allocated === 0n ? 1n : p.allocated;
@@ -194,6 +220,16 @@ export function EncumberConsole() {
     key: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [demoKey, setDemoKey] = useState<string>("");
+  const [commit, setCommit] = useState<{
+    id: bigint;
+    vendor: string;
+    deadline: bigint;
+    open: boolean;
+    amount: bigint;
+    orderId: string;
+  } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const stopRef = useRef(false);
   const namesRef = useRef<Record<string, string>>({});
 
@@ -209,6 +245,22 @@ export function EncumberConsole() {
       setProjects(ps.slice(-2) as unknown as Project[]);
       setActivities([...acts] as Activity[]);
       setOwner(own);
+      const n = await publicClient.readContract({ ...base, functionName: "reservationCount" });
+      if (n > 0n) {
+        const r = await publicClient.readContract({
+          ...base,
+          functionName: "getReservation",
+          args: [n - 1n],
+        });
+        setCommit({
+          id: n - 1n,
+          vendor: r.vendor,
+          deadline: BigInt(r.deadline),
+          open: r.open,
+          amount: r.amount,
+          orderId: r.orderId,
+        });
+      }
       const unknown = [...new Set(acts.map((a) => a.actor.toLowerCase()))].filter(
         (a) => a !== own.toLowerCase() && !(a in namesRef.current),
       );
@@ -224,6 +276,24 @@ export function EncumberConsole() {
     } catch {
       /* 忽略单次失败 */
     }
+  }, []);
+
+  useEffect(() => {
+    // 演示口令：?key=xxx 打开一次就记住，没有口令时只读
+    const t0 = setTimeout(() => {
+      try {
+        const fromUrl = new URLSearchParams(window.location.search).get("key");
+        if (fromUrl) localStorage.setItem("encumber:demo-key", fromUrl);
+        setDemoKey(fromUrl || localStorage.getItem("encumber:demo-key") || "");
+      } catch {
+        /* 忽略 */
+      }
+    }, 0);
+    const tick = setInterval(() => setNow(Date.now()), 500);
+    return () => {
+      clearTimeout(t0);
+      clearInterval(tick);
+    };
   }, []);
 
   useEffect(() => {
@@ -251,7 +321,7 @@ export function EncumberConsole() {
     try {
       const r = await fetch("/api/demo", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-demo-key": demoKey },
         body: JSON.stringify(beat.body),
       });
       const data = (await r.json()) as { steps?: StepResult[]; error?: string };
@@ -302,8 +372,11 @@ export function EncumberConsole() {
     setRunning(false);
   }
 
-  const actorName = (a: string) =>
-    a.toLowerCase() === owner.toLowerCase() ? "财务" : names[a.toLowerCase()] || shortAddress(a);
+  const actorName = (a: string) => {
+    if (a.toLowerCase() === owner.toLowerCase()) return "财务";
+    if (commit && a.toLowerCase() === commit.vendor.toLowerCase()) return "客服供应商";
+    return names[a.toLowerCase()] || shortAddress(a);
+  };
   const tagOf = (id: number) => {
     if (projects.length !== 2) return `#${id}`;
     if (id === Number(projects[0].id)) return "甲";
@@ -312,6 +385,7 @@ export function EncumberConsole() {
   };
 
   const beat = beatIndex >= 0 ? SCRIPT[beatIndex] : null;
+  const agentOffline = beatIndex >= 3 && beatIndex <= 5; // 幕一第 2 步起 Agent 掉线，直到幕二结束
   const raceSteps = beat?.expect === "race" ? lastSteps.slice(-2) : [];
 
   if (!ADDRESS) {
@@ -393,6 +467,9 @@ export function EncumberConsole() {
             >
               {running ? "演示进行中…" : "▶ 一键演示"}
             </button>
+            {!demoKey && (
+              <div className="text-center text-xs text-zinc-500">只读模式（演示需口令）</div>
+            )}
             {running && (
               <button
                 type="button"
@@ -424,6 +501,68 @@ export function EncumberConsole() {
             出错了：{error}
           </div>
         )}
+
+        {/* 付款承诺 + Agent 状态 */}
+        <section className="mt-6 grid gap-4 md:grid-cols-[1fr_2fr]">
+          <div
+            className={`rounded-3xl border p-5 transition ${
+              agentOffline
+                ? "border-rose-400/40 bg-rose-500/10"
+                : "border-emerald-400/30 bg-emerald-500/10"
+            }`}
+          >
+            <div className="text-sm text-zinc-400">客服 Agent</div>
+            <div className="mt-1 flex items-center gap-2 text-2xl font-black">
+              <span
+                className={`h-3 w-3 rounded-full ${agentOffline ? "bg-rose-500" : "animate-pulse bg-emerald-400"}`}
+              />
+              {agentOffline ? "已掉线 🔌" : "在线"}
+            </div>
+            <div className="mt-1 text-sm text-zinc-400">
+              {agentOffline ? "Agent 不在线，供应商照样能凭承诺收款" : "负责下单、锁款"}
+            </div>
+          </div>
+          <div className="rounded-3xl border border-amber-400/30 bg-amber-400/5 p-5">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-amber-300">🔒 链上付款承诺（供应商可独立兑现）</div>
+              {commit && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                    commit.open ? "bg-amber-400 text-zinc-950" : "bg-zinc-700 text-zinc-300"
+                  }`}
+                >
+                  {commit.open ? "锁定中" : "已结算 / 已释放"}
+                </span>
+              )}
+            </div>
+            {commit ? (
+              <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm md:grid-cols-4">
+                <div>
+                  <div className="text-zinc-500">订单号</div>
+                  <div className="font-mono font-bold">{orderText(commit.orderId)}</div>
+                </div>
+                <div>
+                  <div className="text-zinc-500">指定供应商</div>
+                  <div className="font-mono font-bold">{shortAddress(commit.vendor)}</div>
+                </div>
+                <div>
+                  <div className="text-zinc-500">锁定上限</div>
+                  <div className="text-lg font-black text-amber-300">
+                    {formatMon(commit.amount)} MON
+                  </div>
+                </div>
+                <div>
+                  <div className="text-zinc-500">截止前只有供应商能结算</div>
+                  <div className="font-mono text-lg font-black tabular-nums">
+                    {commit.open ? countdown(commit.deadline, now) : "—"}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 text-sm text-zinc-500">还没有承诺</div>
+            )}
+          </div>
+        </section>
 
         {/* 第一屏：两个项目 */}
         <section className="mt-6 grid gap-5 md:grid-cols-2">

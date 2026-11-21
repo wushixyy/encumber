@@ -56,9 +56,11 @@ const agentAKey = env.AGENT_A_KEY || generatePrivateKey();
 const agentBKey = env.AGENT_B_KEY || generatePrivateKey();
 const agentA = privateKeyToAccount(agentAKey);
 const agentB = privateKeyToAccount(agentBKey);
-// 服务商收款地址（演示用，不需要私钥）
-const vendorA = env.VENDOR_A_ADDRESS || privateKeyToAccount(generatePrivateKey()).address;
-const vendorB = env.VENDOR_B_ADDRESS || privateKeyToAccount(generatePrivateKey()).address;
+// 供应商钱包：演示时供应商要自己结算，所以需要私钥
+const vendorAKey = env.VENDOR_A_KEY || generatePrivateKey();
+const vendorBKey = env.VENDOR_B_KEY || generatePrivateKey();
+const vendorA = privateKeyToAccount(vendorAKey).address;
+const vendorB = privateKeyToAccount(vendorBKey).address;
 
 async function send(label, request) {
   const hash = await wallet.writeContract({ address, abi, ...request });
@@ -84,6 +86,7 @@ await send("分配 乙", { functionName: "allocate", args: [1n, ALLOC_B] });
 for (const [label, a] of [
   ["客服 Agent", agentA],
   ["数据 Agent", agentB],
+  ["客服供应商", privateKeyToAccount(vendorAKey)],
 ]) {
   const bal = await pub.getBalance({ address: a.address });
   if (bal < AGENT_GAS / 2n) {
@@ -96,6 +99,8 @@ for (const [label, a] of [
 setEnv("NEXT_PUBLIC_ENCUMBER_ADDRESS", address);
 setEnv("AGENT_A_KEY", agentAKey);
 setEnv("AGENT_B_KEY", agentBKey);
+setEnv("VENDOR_A_KEY", vendorAKey);
+setEnv("VENDOR_B_KEY", vendorBKey);
 setEnv("VENDOR_A_ADDRESS", vendorA);
 setEnv("VENDOR_B_ADDRESS", vendorB);
 console.log(

@@ -264,9 +264,19 @@ export const encumberAbi = [
             internalType: "address",
           },
           {
+            name: "vendor",
+            type: "address",
+            internalType: "address",
+          },
+          {
             name: "projectId",
             type: "uint32",
             internalType: "uint32",
+          },
+          {
+            name: "deadline",
+            type: "uint64",
+            internalType: "uint64",
           },
           {
             name: "open",
@@ -277,6 +287,11 @@ export const encumberAbi = [
             name: "amount",
             type: "uint256",
             internalType: "uint256",
+          },
+          {
+            name: "orderId",
+            type: "bytes32",
+            internalType: "bytes32",
           },
         ],
       },
@@ -422,6 +437,16 @@ export const encumberAbi = [
         type: "uint256",
         internalType: "uint256",
       },
+      {
+        name: "orderId",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "ttlSeconds",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [
       {
@@ -506,6 +531,37 @@ export const encumberAbi = [
       },
       {
         name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Committed",
+    inputs: [
+      {
+        name: "reservationId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
+      },
+      {
+        name: "vendor",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "orderId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "deadline",
         type: "uint256",
         indexed: false,
         internalType: "uint256",

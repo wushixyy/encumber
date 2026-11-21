@@ -24,7 +24,16 @@ const LEFT_A = ALLOC_A / 3n; // 开场后甲只剩 1/3（0.02）
 const ACTUAL = (LEFT_A * 6n) / 10n; // 实际花费 0.012，释放 0.008
 
 const Body = z.object({
-  step: z.enum(["reset", "setup", "reserve", "reallocate", "settle", "realloc-released", "race"]),
+  step: z.enum([
+    "reset",
+    "setup",
+    "reserve",
+    "finance-cancel",
+    "reallocate",
+    "settle",
+    "realloc-released",
+    "race",
+  ]),
   first: z.enum(["pay", "reallocate"]).optional(),
 });
 
@@ -44,6 +53,7 @@ function clients() {
     owner: mk(key("FUNDER_PRIVATE_KEY")),
     agentA: mk(key("AGENT_A_KEY")),
     agentB: mk(key("AGENT_B_KEY")),
+    vendorA: mk(key("VENDOR_A_KEY")),
   };
 }
 
@@ -61,10 +71,12 @@ const REASONS = [
   "调用者不是 Agent",
   "可用余额不足",
   "这笔钱已被预占",
-  "不是这笔预占的 Agent",
-  "预占已结算或释放",
-  "实际花费超过预占上限",
+  "不是这笔承诺指定的供应商",
+  "承诺已结算或释放",
+  "实际花费超过锁定上限",
   "项目不存在",
+  "承诺还没到期，谁也取消不了",
+  "承诺已过期",
 ];
 
 async function exec(
@@ -122,13 +134,18 @@ async function currentRound(address: Address) {
 }
 
 export async function POST(request: Request) {
+  // 演示口令：只有带口令打开的控制台能发交易，其他人只读
+  const demoKey = process.env.DEMO_KEY;
+  if (demoKey && request.headers.get("x-demo-key") !== demoKey) {
+    return NextResponse.json({ error: "只读模式：需要演示口令" }, { status: 401 });
+  }
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "参数不正确" }, { status: 400 });
   const { step, first } = parsed.data;
 
   try {
     const c = clients();
-    const { address, owner, agentA, agentB } = c;
+    const { address, owner, agentA, agentB, vendorA: vendorAWallet } = c;
     const steps: Step[] = [];
     const vendorA = (process.env.VENDOR_A_ADDRESS || owner.account!.address) as Address;
     const vendorB = (process.env.VENDOR_B_ADDRESS || owner.account!.address) as Address;
@@ -173,7 +190,26 @@ export async function POST(request: Request) {
       );
     } else if (step === "reserve") {
       steps.push(
-        await exec(agentA, address, "客服 Agent 预占（调用大模型前锁住上限）", "reserve", [LEFT_A]),
+        await exec(
+          agentA,
+          address,
+          "客服 Agent 锁款 0.02（绑定供应商、订单号、10 分钟截止）",
+          "reserve",
+          [LEFT_A, `0x${Buffer.from(`order-${Date.now()}`).toString("hex").padEnd(64, "0")}`, 600n],
+        ),
+      );
+    } else if (step === "finance-cancel") {
+      // Agent 已掉线：财务想取消这笔承诺、或把钱调走，都会被合约拒绝
+      const { a, b } = await currentRound(address);
+      const n = await publicClient.readContract({
+        address,
+        abi: encumberAbi,
+        functionName: "reservationCount",
+      });
+      if (n === 0n) throw new Error("还没有锁款");
+      steps.push(await exec(owner, address, "财务尝试取消这笔承诺", "release", [n - 1n]));
+      steps.push(
+        await exec(owner, address, "财务尝试把这 0.02 调给乙", "reallocate", [a, b, LEFT_A]),
       );
     } else if (step === "reallocate") {
       const { a, b } = await currentRound(address);
@@ -188,10 +224,13 @@ export async function POST(request: Request) {
       });
       if (n === 0n) throw new Error("还没有预占");
       steps.push(
-        await exec(agentA, address, "客服 Agent 按实际花费结算（剩余自动释放）", "settle", [
-          n - 1n,
-          ACTUAL,
-        ]),
+        await exec(
+          vendorAWallet,
+          address,
+          "供应商自己按实际用量 0.012 结算（Agent 不在线也能收款）",
+          "settle",
+          [n - 1n, ACTUAL],
+        ),
       );
     } else if (step === "realloc-released") {
       const { a, b } = await currentRound(address);

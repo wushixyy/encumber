@@ -19,7 +19,10 @@
         "AGENT_B_KEY",
         "VENDOR_A_ADDRESS",
         "VENDOR_B_ADDRESS",
-        "DEMO_ROUND"
+        "DEMO_ROUND",
+        "VENDOR_A_KEY",
+        "VENDOR_B_KEY",
+        "DEMO_KEY"
       ]
     },
     "dev": {
@@ -38,7 +41,10 @@
         "AGENT_B_KEY",
         "VENDOR_A_ADDRESS",
         "VENDOR_B_ADDRESS",
-        "DEMO_ROUND"
+        "DEMO_ROUND",
+        "VENDOR_A_KEY",
+        "VENDOR_B_KEY",
+        "DEMO_KEY"
       ]
     },
     "start": {
@@ -57,7 +63,10 @@
         "AGENT_B_KEY",
         "VENDOR_A_ADDRESS",
         "VENDOR_B_ADDRESS",
-        "DEMO_ROUND"
+        "DEMO_ROUND",
+        "VENDOR_A_KEY",
+        "VENDOR_B_KEY",
+        "DEMO_KEY"
       ]
     },
     "typecheck": {
