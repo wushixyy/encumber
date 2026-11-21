@@ -57,7 +57,10 @@ function loadBurner() {
 }
 
 function errorText(e: unknown): string {
-  const msg = e instanceof Error ? (e as Error & { shortMessage?: string }).shortMessage || e.message : String(e);
+  const msg =
+    e instanceof Error
+      ? (e as Error & { shortMessage?: string }).shortMessage || e.message
+      : String(e);
   if (/insufficient funds/i.test(msg)) return "余额不够，等发币到账或少付一点押金";
   if (/InsufficientPayment/.test(msg)) return "付的钱不够：价格刚被别人改了，刷新后再试";
   if (/User rejected|denied/i.test(msg)) return "你取消了签名";
@@ -82,7 +85,9 @@ export function PlayClient() {
   const [depositSeconds, setDepositSeconds] = useState(60);
 
   const [busy, setBusy] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ kind: "ok" | "err"; text: string; tx?: string } | null>(null);
+  const [message, setMessage] = useState<{ kind: "ok" | "err"; text: string; tx?: string } | null>(
+    null,
+  );
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
@@ -165,13 +170,19 @@ export function PlayClient() {
   const connectInjected = useCallback(async () => {
     const eth = window.ethereum;
     if (!eth) {
-      setMessage({ kind: "err", text: "没有检测到钱包插件，请用 MetaMask / 欧易钱包的内置浏览器打开" });
+      setMessage({
+        kind: "err",
+        text: "没有检测到钱包插件，请用 MetaMask / 欧易钱包的内置浏览器打开",
+      });
       return;
     }
     try {
       const [account] = (await eth.request({ method: "eth_requestAccounts" })) as Address[];
       try {
-        await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x279f" }] });
+        await eth.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x279f" }],
+        });
       } catch {
         await eth.request({
           method: "wallet_addEthereumChain",
@@ -203,8 +214,13 @@ export function PlayClient() {
       body: JSON.stringify({ contentType: f.type, size: f.size }),
     });
     const data = (await r.json()) as { uploadUrl?: string; publicUrl?: string; error?: string };
-    if (!r.ok || !data.uploadUrl || !data.publicUrl) throw new Error(data.error || "拿不到上传地址");
-    const put = await fetch(data.uploadUrl, { method: "PUT", headers: { "Content-Type": f.type }, body: f });
+    if (!r.ok || !data.uploadUrl || !data.publicUrl)
+      throw new Error(data.error || "拿不到上传地址");
+    const put = await fetch(data.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": f.type },
+      body: f,
+    });
     if (!put.ok) throw new Error(`上传失败（${put.status}）`);
     return data.publicUrl;
   }
@@ -213,10 +229,14 @@ export function PlayClient() {
     if (!wallet || !address || !slot || !CONTRACT_ADDRESS) return;
     setMessage(null);
     if (price < MIN_PRICE) return setMessage({ kind: "err", text: "价格最低 0.001 MON" });
-    if (kind === KIND_TEXT && !text.trim()) return setMessage({ kind: "err", text: "写点什么再抢吧" });
+    if (kind === KIND_TEXT && !text.trim())
+      return setMessage({ kind: "err", text: "写点什么再抢吧" });
     if (kind !== KIND_TEXT && !file) return setMessage({ kind: "err", text: "先选一个文件" });
     if (balance < total + GAS_RESERVE) {
-      return setMessage({ kind: "err", text: `余额不够：需要约 ${formatMon(total + GAS_RESERVE)} MON` });
+      return setMessage({
+        kind: "err",
+        text: `余额不够：需要约 ${formatMon(total + GAS_RESERVE)} MON`,
+      });
     }
 
     localStorage.setItem(NICK_KEY, nickname);
@@ -227,7 +247,13 @@ export function PlayClient() {
         content = await uploadMedia(file);
       }
       setBusy("上链中…");
-      const args = [BigInt(slotId), nickname.trim() || shortAddress(address), kind, content, price] as const;
+      const args = [
+        BigInt(slotId),
+        nickname.trim() || shortAddress(address),
+        kind,
+        content,
+        price,
+      ] as const;
       const started = performance.now();
       let hash: `0x${string}`;
       if (mode === "burner") {
@@ -256,7 +282,11 @@ export function PlayClient() {
         if (receipt.status !== "success") throw new Error("交易失败（可能被别人抢先了），再试一次");
       }
       const ms = Math.round(performance.now() - started);
-      setMessage({ kind: "ok", text: `抢到了！确认用时 ${(ms / 1000).toFixed(2)} 秒，抬头看大屏`, tx: hash });
+      setMessage({
+        kind: "ok",
+        text: `抢到了！确认用时 ${(ms / 1000).toFixed(2)} 秒，抬头看大屏`,
+        tx: hash,
+      });
       setText("");
       setFile(null);
       setCooldownUntil(Date.now() + COOLDOWN_MS);
@@ -290,10 +320,14 @@ export function PlayClient() {
         <h1 className="text-3xl font-black tracking-tight">
           霸屏 <span className="text-amber-400">Hold the Screen</span>
         </h1>
-        <p className="mt-1 text-sm text-zinc-400">价格你自己定，按持有时间交税，谁付你的价谁就能买走。</p>
+        <p className="mt-1 text-sm text-zinc-400">
+          价格你自己定，按持有时间交税，谁付你的价谁就能买走。
+        </p>
         <div className="mt-3 flex items-center justify-between rounded-xl bg-zinc-900 px-3 py-2 text-sm">
           <span className="text-zinc-400">{address ? shortAddress(address) : "…"}</span>
-          <span className={fundStatus === "error" ? "text-rose-400" : "text-emerald-400"}>{walletLine}</span>
+          <span className={fundStatus === "error" ? "text-rose-400" : "text-emerald-400"}>
+            {walletLine}
+          </span>
         </div>
         {mode === "burner" && (
           <button
@@ -375,7 +409,11 @@ export function PlayClient() {
             />
           ) : (
             <label className="mt-2 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-zinc-700 bg-zinc-900 px-3 py-6 text-sm text-zinc-400">
-              {file ? file.name : kind === KIND_IMAGE ? "选择图片（≤ 5MB）" : "选择视频（≤ 30MB，15 秒内）"}
+              {file
+                ? file.name
+                : kind === KIND_IMAGE
+                  ? "选择图片（≤ 5MB）"
+                  : "选择视频（≤ 30MB，15 秒内）"}
               <input
                 type="file"
                 accept={kind === KIND_IMAGE ? "image/*" : "video/*"}
@@ -413,7 +451,8 @@ export function PlayClient() {
         </div>
 
         <p className="text-xs leading-relaxed text-zinc-500">
-          定价越高越难被抢，但每秒交的税也越多（每秒 1%）。被别人买走时，对方付的定价和你没用完的税金都会退给你。
+          定价越高越难被抢，但每秒交的税也越多（每秒
+          1%）。被别人买走时，对方付的定价和你没用完的税金都会退给你。
         </p>
 
         <div className="rounded-xl bg-zinc-900 px-3 py-3 text-sm">
@@ -433,10 +472,11 @@ export function PlayClient() {
       </section>
 
       {message && (
-        <div
-          role="status"
-          className={`mt-4 rounded-xl px-3 py-3 text-sm ${
-            message.kind === "ok" ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300"
+        <output
+          className={`mt-4 block rounded-xl px-3 py-3 text-sm ${
+            message.kind === "ok"
+              ? "bg-emerald-500/15 text-emerald-300"
+              : "bg-rose-500/15 text-rose-300"
           }`}
         >
           {message.text}
@@ -445,7 +485,7 @@ export function PlayClient() {
               查看交易
             </a>
           )}
-        </div>
+        </output>
       )}
 
       <div className="fixed inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950 via-zinc-950 to-transparent px-4 pt-6 pb-5">

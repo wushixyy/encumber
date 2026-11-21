@@ -12,7 +12,7 @@ export const KIND_VIDEO = 2;
 export const KIND_LABELS = ["文字", "图片", "视频"] as const;
 
 /** 和合约一致：每秒税率 1%，最低定价 0.001 MON */
-export const TAX_BPS_PER_SECOND = 100n;
+const TAX_BPS_PER_SECOND = 100n;
 export const MIN_PRICE = 1_000_000_000_000_000n;
 
 export type SlotState = {
@@ -56,9 +56,12 @@ export function useSlots(intervalMs = 1000) {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const first = setTimeout(() => void refresh(), 0);
     const timer = setInterval(() => void refresh(), intervalMs);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
   }, [refresh, intervalMs]);
 
   return { slots, error, refresh };

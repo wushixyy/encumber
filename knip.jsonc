@@ -2,6 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
   // 预装内容开始使用后，移除对应豁免；过期配置提示也应使检查失败。
   "treatConfigHintsAsErrors": true,
+  // forge 由 Foundry 提供，不是 npm 依赖。
+  "ignoreBinaries": ["forge"],
   // Web 预留的 cn 入口。
   "ignoreFiles": ["apps/web/src/lib/utils.ts"],
   "workspaces": {
@@ -19,12 +21,8 @@
         "cn",
         // 数据库正式接入后使用。
         "drizzle-orm",
-        // 随实际界面和运行时数据校验需求使用。
+        // 随实际界面需求使用。
         "lucide-react",
-        "zod",
-        // 链交互与二维码：开工写业务代码后使用，届时移除。
-        "qrcode.react",
-        "viem",
       ],
     },
   },

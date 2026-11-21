@@ -2,7 +2,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const artifact = JSON.parse(
-  readFileSync(new URL("../contracts/out/HoldTheScreen.sol/HoldTheScreen.json", import.meta.url), "utf8"),
+  readFileSync(
+    new URL("../contracts/out/HoldTheScreen.sol/HoldTheScreen.json", import.meta.url),
+    "utf8",
+  ),
 );
 const out = `// 由 scripts/gen-abi.mjs 生成，不要手改
 export const holdTheScreenAbi = ${JSON.stringify(artifact.abi, null, 2)} as const;

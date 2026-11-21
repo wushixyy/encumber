@@ -3,7 +3,7 @@ import { monadTestnet } from "viem/chains";
 
 export { monadTestnet };
 
-export const RPC_URLS = [
+const RPC_URLS = [
   process.env.NEXT_PUBLIC_RPC_URL || "https://testnet-rpc.monad.xyz",
   "https://rpc.testnet.monad.xyz",
 ];
@@ -23,10 +23,9 @@ export const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || und
   | Address
   | undefined;
 
-export const EXPLORER_URL = "https://testnet.monadexplorer.com";
+const EXPLORER_URL = "https://testnet.monadexplorer.com";
 
 export const txUrl = (hash: string) => `${EXPLORER_URL}/tx/${hash}`;
-export const addressUrl = (address: string) => `${EXPLORER_URL}/address/${address}`;
 
 /** 把 wei 格式化成最多 4 位小数的 MON */
 export function formatMon(wei: bigint, digits = 4): string {

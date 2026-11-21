@@ -32,7 +32,10 @@ export async function POST(request: Request) {
   const { contentType, size } = parsed.data;
   const rule = ALLOWED[contentType];
   if (!rule) {
-    return NextResponse.json({ error: "只支持 PNG / JPG / GIF / WebP 图片和 MP4 / WebM / MOV 视频" }, { status: 400 });
+    return NextResponse.json(
+      { error: "只支持 PNG / JPG / GIF / WebP 图片和 MP4 / WebM / MOV 视频" },
+      { status: 400 },
+    );
   }
   if (size > rule.maxBytes) {
     return NextResponse.json({ error: `文件太大，最多 ${rule.maxBytes / MB}MB` }, { status: 400 });

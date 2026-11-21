@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Web",
+  title: "霸屏 · Hold the Screen",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
